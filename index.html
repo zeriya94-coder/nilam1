@@ -1,0 +1,1449 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Green School Battle</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Fredoka+One&family=Nunito:wght@700&display=swap" rel="stylesheet">
+    <style>
+        /* BASE STYLES & PLATFORMER AESTHETICS */
+        :root {
+            --color-sky: #4EC0CA;
+            --color-grass: #58D03B;
+            --color-dirt: #D28C46;
+            --color-panel: #FFECB3;
+            --btn-shadow: 0 6px 0px rgba(0, 0, 0, 0.2);
+            --btn-active-shadow: 0 0px 0px rgba(0, 0, 0, 0.2);
+        }
+        body, html {
+            font-family: 'Fredoka One', cursive;
+            background-color: var(--color-sky);
+            margin: 0;
+            padding: 0;
+            width: 100vw;
+            height: 100vh;
+            overflow: hidden;
+            touch-action: none; /* Critical for smartboard games */
+            user-select: none;
+            -webkit-user-select: none;
+            -webkit-touch-callout: none;
+            color: #333;
+        }
+        h1, h2, h3, .score-text { text-shadow: 2px 2px 0 #fff, -1px -1px 0 #fff, 1px -1px 0 #fff, -1px 1px 0 #fff, 1px 1px 0 #fff; }
+        
+        /* SCENERY */
+        .bg-scenery {
+            position: absolute;
+            bottom: 0; width: 100%; height: 30vh;
+            background: linear-gradient(to bottom, var(--color-grass) 20%, var(--color-dirt) 20%);
+            z-index: -1;
+            border-top: 8px solid #fff;
+        }
+        .cloud {
+            position: absolute; background: white; border-radius: 50px;
+            box-shadow: 0 5px 0 rgba(0,0,0,0.1);
+        }
+        
+        /* SCREENS */
+        .screen { display: none; width: 100vw; height: 100vh; position: relative; }
+        .screen.active { display: flex; flex-direction: column; }
+        
+        /* BUTTONS - Large for Smartboard */
+        .game-btn {
+            background-color: #FF5722; color: white; border: 4px solid white;
+            border-radius: 16px; padding: 15px 30px; font-size: 1.5rem;
+            box-shadow: var(--btn-shadow); cursor: pointer; transition: all 0.1s;
+            text-shadow: 1px 1px 2px rgba(0,0,0,0.5);
+            min-height: 80px; /* Essential for touch */
+            min-width: 120px;
+            touch-action: manipulation;
+        }
+        .game-btn:active { transform: translateY(6px); box-shadow: var(--btn-active-shadow); }
+        .game-btn.blue { background-color: #2196F3; }
+        .game-btn.green { background-color: #4CAF50; }
+        .game-btn.yellow { background-color: #FFEB3B; color: #333; text-shadow: none; }
+        .game-btn:disabled { opacity: 0.5; cursor: not-allowed; transform: none; box-shadow: var(--btn-shadow); }
+
+        /* GAME LAYOUT */
+        #top-bar { height: 12vh; background: rgba(255,255,255,0.9); border-bottom: 4px solid #ddd; z-index: 10; }
+        #play-area { height: 88vh; display: flex; position: relative; }
+        .side { width: 50%; height: 100%; position: relative; padding: 20px; overflow: hidden; display: flex; flex-direction: column; }
+        #left-side { border-right: 8px solid #333; background: rgba(255,255,255,0.3); }
+        #right-side { background: rgba(255,255,255,0.4); }
+
+        /* TIMER & SCORES */
+        .timer-box { 
+            background: #FF5722; color: white; border: 4px solid white; border-radius: 50%;
+            width: 80px; height: 80px; display: flex; align-items: center; justify-content: center;
+            font-size: 2.5rem; position: absolute; left: 50%; transform: translateX(-50%); top: 10px;
+            box-shadow: 0 4px 8px rgba(0,0,0,0.3); z-index: 50;
+        }
+        .timer-pulse { animation: pulse 1s infinite; background: #D32F2F; }
+        @keyframes pulse { 0% { transform: translateX(-50%) scale(1); } 50% { transform: translateX(-50%) scale(1.1); } 100% { transform: translateX(-50%) scale(1); } }
+
+        /* SETUP SCREEN LISTS */
+        .pupil-list { min-height: 200px; background: white; border: 4px solid #333; border-radius: 12px; padding: 10px; }
+        
+        /* POINTER DRAG & DROP ELEMENTS */
+        .name-card { 
+            background: #FFEB3B; border: 2px solid #333; border-radius: 8px; padding: 12px 16px; margin: 6px; 
+            display: inline-block; cursor: pointer; font-family: 'Nunito', sans-serif; font-weight: bold; font-size: 1.5rem; 
+            touch-action: none; position: relative; z-index: 10;
+        }
+
+        .drag-item {
+            background: white; border: 4px solid #333; border-radius: 12px; padding: 15px;
+            font-size: 1.5rem; text-align: center; cursor: pointer; box-shadow: 0 4px 0 #333;
+            margin: 10px; touch-action: none; position: relative; z-index: 20;
+            font-family: 'Nunito', sans-serif; font-weight: bold;
+            min-width: 120px;
+            will-change: transform;
+        }
+        .drag-item.dragging, .name-card.dragging { 
+            z-index: 9999 !important; opacity: 0.95; cursor: grabbing; box-shadow: 0 10px 20px rgba(0,0,0,0.4); 
+        }
+        
+        .drop-zone {
+            background: rgba(255,255,255,0.5); border: 4px dashed #666; border-radius: 12px;
+            min-height: 120px; min-width: 120px; display: flex; align-items: center; justify-content: center; flex-wrap: wrap;
+            margin: 10px; font-size: 1.5rem; color: #666; transition: background-color 0.2s;
+            position: relative;
+        }
+        .drop-zone.hovered { background: rgba(255,235,59,0.5); border-color: #333; }
+        
+        .drag-pool {
+            min-height: 140px; display: flex; flex-wrap: wrap; justify-content: center;
+        }
+
+        /* LOCKED STATE */
+        .locked-overlay {
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0,0,0,0.5); z-index: 40; display: flex; flex-direction: column;
+            align-items: center; justify-content: center; color: white; font-size: 3rem;
+            backdrop-filter: blur(4px); opacity: 0; pointer-events: none; transition: opacity 0.3s;
+        }
+        .locked-overlay.show { opacity: 1; pointer-events: all; }
+        .locked-icon { font-size: 5rem; margin-bottom: 20px; animation: bounceLock 1s infinite; }
+        @keyframes bounceLock { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-20px); } }
+
+        /* SVG TOUCH & FIND */
+        .svg-scene { width: 100%; height: 100%; background: #E0F7FA; border: 4px solid #333; border-radius: 12px; position: relative; touch-action: none; }
+        .clickable-obj { cursor: pointer; transition: all 0.2s; stroke: transparent; stroke-width: 4px; touch-action: none; }
+        .clickable-obj:hover { filter: brightness(1.2); }
+        .clickable-obj.selected { stroke: #FFEB3B; stroke-width: 8px; filter: drop-shadow(0 0 15px #FFEB3B); transform-origin: center; transform: scale(1.05); }
+
+        /* FEEDBACK POPUP */
+        .feedback-popup {
+            position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%) scale(0);
+            background: white; border: 8px solid #4CAF50; border-radius: 20px; padding: 20px 40px;
+            font-size: 3rem; color: #4CAF50; z-index: 100; box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+            transition: transform 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+            text-align: center; pointer-events: none;
+        }
+        .feedback-popup.show { transform: translate(-50%, -50%) scale(1); }
+        .feedback-popup.wrong { border-color: #F44336; color: #F44336; }
+
+        /* TEACHER CONTROLS */
+        #teacher-controls {
+            position: absolute; bottom: 10px; right: 10px; z-index: 1000;
+            background: rgba(255,255,255,0.9); border: 2px solid #ccc; border-radius: 8px; padding: 5px;
+            display: flex; gap: 5px;
+        }
+        .t-btn { padding: 12px 16px; background: #eee; border: 1px solid #999; border-radius: 4px; cursor: pointer; font-size: 1.2rem; font-family: 'Nunito', sans-serif;}
+        .t-btn:hover { background: #ddd; }
+
+        /* SMARTBOARD VISUALIZERS */
+        .touch-indicator {
+            position: fixed; width: 60px; height: 60px;
+            background: rgba(255, 255, 255, 0.4); border: 4px solid #FFEB3B;
+            border-radius: 50%; pointer-events: none; transform: translate(-50%, -50%);
+            z-index: 99999; box-shadow: 0 0 15px rgba(0,0,0,0.3);
+        }
+        
+        #debug-panel {
+            position: absolute; top: 10px; left: 10px; z-index: 10000;
+            background: rgba(0,0,0,0.8); color: lime; padding: 10px; font-family: monospace; font-size: 14px;
+            border-radius: 8px; pointer-events: none; display: none; white-space: pre;
+        }
+
+        /* CONFETTI */
+        .confetti { position: absolute; width: 15px; height: 15px; background: red; z-index: 200; animation: fall 3s linear infinite; }
+        @keyframes fall { to { transform: translateY(100vh) rotate(720deg); } }
+
+        /* UTILS */
+        .hidden { display: none !important; }
+        .char-img { width: 80px; height: 80px; display: inline-block; background: #ccc; border-radius: 50%; border: 4px solid white; box-shadow: 0 4px 0 rgba(0,0,0,0.2); }
+        .grid-container { display: grid; grid-template-columns: 1fr; gap: 10px; height: 100%; width: 100%; }
+        .stage2-grid { grid-template-rows: repeat(4, 1fr); gap: 20px; }
+        .submit-btn-area { margin-top: auto; display: flex; justify-content: center; padding: 10px; }
+    </style>
+</head>
+<body>
+
+    <!-- BACKGROUND SCENERY -->
+    <div class="bg-scenery"></div>
+    <div class="cloud" style="width: 120px; height: 40px; top: 10%; left: 10%;"></div>
+    <div class="cloud" style="width: 180px; height: 60px; top: 15%; right: 20%;"></div>
+    <div class="cloud" style="width: 100px; height: 35px; top: 25%; left: 40%;"></div>
+
+    <!-- DEBUG PANEL -->
+    <div id="debug-panel"></div>
+
+    <!-- TEACHER CONTROLS -->
+    <div id="teacher-controls">
+        <button class="t-btn" id="btn-fullscreen" onclick="toggleFullScreen()">⛶ Full</button>
+        <button class="t-btn" id="btn-mute" onclick="toggleMute()">🔊 Mute</button>
+        <button class="t-btn" onclick="toggleDebug()">🔍 Info</button>
+        <button class="t-btn" onclick="skipStage()">⏭ Skip</button>
+    </div>
+
+    <!-- SCREEN 0: SMARTBOARD TOUCH TEST -->
+    <div id="screen-touch-test" class="screen active p-8">
+        <div class="bg-white bg-opacity-90 rounded-3xl p-8 border-8 border-gray-400 shadow-2xl max-w-7xl mx-auto w-full flex flex-col h-full">
+            <h1 class="text-6xl text-center text-gray-800 mb-4">SMARTBOARD TOUCH TEST</h1>
+            <p class="text-3xl text-center mb-8 font-sans">Ask two pupils to touch both boxes at the same time.</p>
+            
+            <div class="flex gap-8 flex-grow">
+                <div id="test-pad-b" class="flex-grow bg-red-500 rounded-3xl flex flex-col items-center justify-center text-white text-5xl border-8 border-red-700 select-none shadow-inner" style="touch-action: none;">
+                    GROUP B<br>TOUCH HERE
+                    <div id="test-status-b" class="mt-8 text-3xl h-10 text-yellow-300"></div>
+                </div>
+                <div id="test-pad-a" class="flex-grow bg-blue-500 rounded-3xl flex flex-col items-center justify-center text-white text-5xl border-8 border-blue-700 select-none shadow-inner" style="touch-action: none;">
+                    GROUP A<br>TOUCH HERE
+                    <div id="test-status-a" class="mt-8 text-3xl h-10 text-yellow-300"></div>
+                </div>
+            </div>
+            
+            <div class="mt-8 flex flex-col items-center justify-center gap-4">
+                <div id="test-touch-count" class="text-4xl font-bold text-gray-700">ACTIVE TOUCHES: 0</div>
+                <div id="test-success" class="text-4xl font-bold text-green-600 h-12"></div>
+                <button class="game-btn green text-4xl py-4 px-12 mt-4" onclick="finishTouchTest()">CONTINUE ANYWAY</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- SCREEN 1: SETUP -->
+    <div id="screen-setup" class="screen p-8">
+        <div class="bg-white bg-opacity-90 rounded-3xl p-8 border-8 border-blue-400 shadow-2xl max-w-7xl mx-auto w-full flex flex-col h-full">
+            <h1 class="text-5xl text-center text-blue-600 mb-2">GREEN SCHOOL BATTLE</h1>
+            <h2 class="text-2xl text-center text-green-600 mb-6 font-sans">Help • Clean • Learn • Win!</h2>
+            
+            <div class="flex gap-8 flex-grow overflow-hidden">
+                <!-- Input Area -->
+                <div class="w-1/3 flex flex-col">
+                    <h3 class="text-2xl mb-2 text-gray-700">1. WHO IS PLAYING TODAY?</h3>
+                    <textarea id="player-input" class="w-full flex-grow p-4 text-2xl border-4 border-gray-300 rounded-xl mb-4 font-sans resize-none" placeholder="Enter pupil names here...&#10;Aiman&#10;Sofia&#10;Hana&#10;Amir"></textarea>
+                    <div class="flex gap-2">
+                        <button class="game-btn blue flex-grow text-2xl py-2" onclick="addPlayers()">ADD</button>
+                        <button class="game-btn text-2xl py-2" style="background:#999;" onclick="clearPlayers()">CLEAR</button>
+                    </div>
+                </div>
+
+                <!-- Teams Area -->
+                <div class="w-2/3 flex flex-col">
+                    <div class="flex justify-between items-center mb-2">
+                        <h3 class="text-2xl text-gray-700">2. GROUPS (Drag to swap)</h3>
+                        <button class="game-btn yellow py-2 text-2xl" onclick="randomiseGroups()">RANDOMISE GROUPS</button>
+                    </div>
+                    
+                    <div class="flex gap-4 flex-grow">
+                        <!-- Group B (Left) -->
+                        <div class="w-1/2 flex flex-col">
+                            <input type="text" id="name-group-b" value="GROUP B" class="text-4xl text-center text-white bg-red-500 rounded-t-xl py-4 w-full font-bold border-4 border-b-0 border-black outline-none touch-manipulation">
+                            <div id="list-group-b" class="pupil-list drop-zone-name flex-grow border-t-0 rounded-t-none rounded-b-xl content-start p-2 relative" data-team="B">
+                                <!-- Names go here -->
+                            </div>
+                        </div>
+                        
+                        <!-- Group A (Right) -->
+                        <div class="w-1/2 flex flex-col">
+                            <input type="text" id="name-group-a" value="GROUP A" class="text-4xl text-center text-white bg-blue-500 rounded-t-xl py-4 w-full font-bold border-4 border-b-0 border-black outline-none touch-manipulation">
+                            <div id="list-group-a" class="pupil-list drop-zone-name flex-grow border-t-0 rounded-t-none rounded-b-xl content-start p-2 relative" data-team="A">
+                                <!-- Names go here -->
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="mt-6 flex justify-center">
+                <button class="game-btn green text-5xl py-6 px-16" onclick="startGame()">START BATTLE</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- SCREEN: INTRO/COUNTDOWN -->
+    <div id="screen-intro" class="screen justify-center items-center bg-blue-500 text-white">
+        <h1 id="intro-title" class="text-7xl mb-8 text-center">GET READY!</h1>
+        <div class="flex w-full max-w-5xl justify-around text-4xl mb-12">
+            <div class="text-center bg-red-500 p-8 rounded-2xl border-4 border-white shadow-lg w-2/5">
+                <div id="intro-name-b" class="font-bold mb-4">GROUP B</div>
+                <div class="text-2xl font-sans" id="intro-members-b"></div>
+            </div>
+            <div class="text-center bg-blue-500 p-8 rounded-2xl border-4 border-white shadow-lg w-2/5">
+                <div id="intro-name-a" class="font-bold mb-4">GROUP A</div>
+                <div class="text-2xl font-sans" id="intro-members-a"></div>
+            </div>
+        </div>
+        <div id="countdown-num" class="text-[15rem] font-bold drop-shadow-2xl">3</div>
+    </div>
+
+    <!-- SCREEN: MAIN GAME -->
+    <div id="screen-game" class="screen">
+        <!-- Top Bar -->
+        <div id="top-bar" class="flex justify-between items-center px-8 relative">
+            <div class="flex items-center gap-4">
+                <div class="text-5xl text-red-600 font-bold" id="game-name-b">GROUP B</div>
+                <div class="text-4xl bg-gray-200 px-6 py-2 rounded-xl border-4 border-gray-400">⭐ <span id="score-b">0</span></div>
+            </div>
+            
+            <div class="text-center">
+                <div id="stage-title" class="text-3xl text-gray-700 font-bold tracking-wider">STAGE 1 - WHO DID WHAT?</div>
+                <div id="question-counter" class="text-2xl text-gray-500 font-sans font-bold mt-1">Question 1 / 4</div>
+            </div>
+
+            <div class="flex items-center gap-4">
+                <div class="text-4xl bg-gray-200 px-6 py-2 rounded-xl border-4 border-gray-400">⭐ <span id="score-a">0</span></div>
+                <div class="text-5xl text-blue-600 font-bold" id="game-name-a">GROUP A</div>
+            </div>
+            
+            <div id="main-timer" class="timer-box" style="width: 100px; height: 100px; font-size: 3.5rem;">20</div>
+        </div>
+
+        <!-- Play Area -->
+        <div id="play-area">
+            <!-- Left Side (Group B) -->
+            <div id="left-side" class="side">
+                <div id="content-b" class="flex-grow relative flex flex-col"></div>
+                <div class="submit-btn-area">
+                    <button class="game-btn green w-full text-4xl" id="submit-b" onclick="submitAnswer('B')">SUBMIT B</button>
+                </div>
+                <div id="lock-b" class="locked-overlay">
+                    <div class="locked-icon">🔒</div>
+                    <div class="text-5xl">ANSWER LOCKED</div>
+                </div>
+                <div id="feedback-b" class="feedback-popup">⭐ GREAT!</div>
+            </div>
+            
+            <!-- Right Side (Group A) -->
+            <div id="right-side" class="side">
+                <div id="content-a" class="flex-grow relative flex flex-col"></div>
+                <div class="submit-btn-area">
+                    <button class="game-btn green w-full text-4xl" id="submit-a" onclick="submitAnswer('A')">SUBMIT A</button>
+                </div>
+                <div id="lock-a" class="locked-overlay">
+                    <div class="locked-icon">🔒</div>
+                    <div class="text-5xl">ANSWER LOCKED</div>
+                </div>
+                <div id="feedback-a" class="feedback-popup">⭐ GREAT!</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- SCREEN: TRANSITION -->
+    <div id="screen-transition" class="screen justify-center items-center bg-green-400 text-white">
+        <h1 id="transition-title" class="text-7xl mb-8 text-center drop-shadow-2xl">STAGE COMPLETE!</h1>
+        <div class="flex gap-12 text-6xl mb-12">
+            <div class="bg-red-500 p-10 rounded-3xl border-8 border-white shadow-xl text-center min-w-[300px]">
+                <div id="trans-name-b">GROUP B</div>
+                <div class="mt-4 text-yellow-300 font-sans font-bold">⭐ <span id="trans-score-b">0</span></div>
+            </div>
+            <div class="bg-blue-500 p-10 rounded-3xl border-8 border-white shadow-xl text-center min-w-[300px]">
+                <div id="trans-name-a">GROUP A</div>
+                <div class="mt-4 text-yellow-300 font-sans font-bold">⭐ <span id="trans-score-a">0</span></div>
+            </div>
+        </div>
+        <button class="game-btn yellow text-5xl py-6 px-16" onclick="nextStage()">NEXT STAGE</button>
+    </div>
+
+    <!-- SCREEN: END/WINNER -->
+    <div id="screen-end" class="screen justify-center items-center bg-yellow-400 text-gray-800">
+        <h1 class="text-[5rem] mb-4 text-center text-white drop-shadow-2xl">GREEN SCHOOL CHAMPIONS!</h1>
+        <h2 id="winner-text" class="text-6xl mb-10 text-center text-blue-600 drop-shadow-lg"></h2>
+        
+        <div class="flex gap-16 text-5xl mb-16 w-full justify-center px-12">
+            <div id="final-box-b" class="bg-red-500 text-white p-10 rounded-3xl border-8 border-white shadow-xl text-center w-2/5 max-w-lg transition-transform duration-500">
+                <div id="final-name-b">GROUP B</div>
+                <div class="mt-6 text-yellow-300 text-[5rem] font-sans font-bold">⭐ <span id="final-score-b">0</span></div>
+            </div>
+            <div id="final-box-a" class="bg-blue-500 text-white p-10 rounded-3xl border-8 border-white shadow-xl text-center w-2/5 max-w-lg transition-transform duration-500">
+                <div id="final-name-a">GROUP A</div>
+                <div class="mt-6 text-yellow-300 text-[5rem] font-sans font-bold">⭐ <span id="final-score-a">0</span></div>
+            </div>
+        </div>
+
+        <div class="text-4xl text-green-700 font-sans font-bold mb-12 text-center bg-white p-6 rounded-2xl shadow-lg border-4 border-green-500">
+            GREAT TEAMWORK!<br>LET'S KEEP OUR SCHOOL CLEAN AND GREEN!
+        </div>
+
+        <div class="flex gap-8">
+            <button class="game-btn blue text-3xl py-4" onclick="resetGame(true)">PLAY AGAIN (SAME GROUPS)</button>
+            <button class="game-btn text-3xl py-4" style="background:#FF5722;" onclick="resetGame(false)">NEW GROUPS</button>
+        </div>
+    </div>
+
+    <!-- SCRIPT -->
+    <script>
+        // --- AUDIO SYSTEM (Web Audio API) ---
+        const AudioContext = window.AudioContext || window.webkitAudioContext;
+        let audioCtx;
+        let isMuted = false;
+
+        function initAudio() {
+            if (!audioCtx) audioCtx = new AudioContext();
+            if (audioCtx.state === 'suspended') audioCtx.resume();
+        }
+
+        function playSound(type) {
+            if (isMuted) return;
+            initAudio();
+            const osc = audioCtx.createOscillator();
+            const gainNode = audioCtx.createGain();
+            osc.connect(gainNode);
+            gainNode.connect(audioCtx.destination);
+            
+            const now = audioCtx.currentTime;
+            
+            if (type === 'coin' || type === 'correct') {
+                osc.type = 'sine';
+                osc.frequency.setValueAtTime(880, now);
+                osc.frequency.exponentialRampToValueAtTime(1760, now + 0.1);
+                gainNode.gain.setValueAtTime(0, now);
+                gainNode.gain.linearRampToValueAtTime(0.4, now + 0.05);
+                gainNode.gain.exponentialRampToValueAtTime(0.01, now + 0.5);
+                osc.start(now);
+                osc.stop(now + 0.5);
+            } else if (type === 'wrong') {
+                osc.type = 'triangle';
+                osc.frequency.setValueAtTime(300, now);
+                osc.frequency.exponentialRampToValueAtTime(150, now + 0.3);
+                gainNode.gain.setValueAtTime(0.4, now);
+                gainNode.gain.exponentialRampToValueAtTime(0.01, now + 0.3);
+                osc.start(now);
+                osc.stop(now + 0.3);
+            } else if (type === 'tick') {
+                osc.type = 'square';
+                osc.frequency.setValueAtTime(400, now);
+                gainNode.gain.setValueAtTime(0.15, now);
+                gainNode.gain.exponentialRampToValueAtTime(0.01, now + 0.05);
+                osc.start(now);
+                osc.stop(now + 0.05);
+            } else if (type === 'snap') {
+                osc.type = 'sine';
+                osc.frequency.setValueAtTime(600, now);
+                osc.frequency.exponentialRampToValueAtTime(800, now + 0.1);
+                gainNode.gain.setValueAtTime(0.2, now);
+                gainNode.gain.linearRampToValueAtTime(0.01, now + 0.1);
+                osc.start(now);
+                osc.stop(now + 0.1);
+            } else if (type === 'win') {
+                osc.type = 'sine';
+                let freqs = [523.25, 659.25, 783.99, 1046.50];
+                freqs.forEach((freq, i) => {
+                    osc.frequency.setValueAtTime(freq, now + i * 0.15);
+                });
+                gainNode.gain.setValueAtTime(0.3, now);
+                gainNode.gain.linearRampToValueAtTime(0, now + 1.0);
+                osc.start(now);
+                osc.stop(now + 1.0);
+            } else if (type === 'lock') {
+                osc.type = 'sine';
+                osc.frequency.setValueAtTime(500, now);
+                osc.frequency.exponentialRampToValueAtTime(300, now + 0.15);
+                gainNode.gain.setValueAtTime(0.3, now);
+                gainNode.gain.linearRampToValueAtTime(0.01, now + 0.15);
+                osc.start(now);
+                osc.stop(now + 0.15);
+            }
+        }
+
+        function toggleMute() {
+            isMuted = !isMuted;
+            document.getElementById('btn-mute').innerText = isMuted ? '🔇 Unmute' : '🔊 Mute';
+        }
+
+        function toggleFullScreen() {
+            if (!document.fullscreenElement) {
+                document.documentElement.requestFullscreen().catch(err => {
+                    console.log(`Error attempting to enable full-screen mode: ${err.message}`);
+                });
+            } else {
+                document.exitFullscreen();
+            }
+        }
+
+        let debugMode = false;
+        function toggleDebug() {
+            debugMode = !debugMode;
+            document.getElementById('debug-panel').style.display = debugMode ? 'block' : 'none';
+        }
+
+        // --- GAME STATE ---
+        let gameState = {
+            groupB: { name: 'GROUP B', players: [], score: 0, locked: false, currentAnswers: {} },
+            groupA: { name: 'GROUP A', players: [], score: 0, locked: false, currentAnswers: {} },
+            currentStage: 0,
+            currentQuestion: 0,
+            timer: 20,
+            timerInterval: null
+        };
+
+        // --- DATA STRUCTURES ---
+        const gameData = [
+            {
+                title: "STAGE 1 - WHO DID WHAT?", type: "match",
+                questions: [
+                    { prompt: "Who picked up the rubbish?", correct: { "Lina": ["picked up the rubbish"] }, options: ["picked up the rubbish"], targets: ["Lina", "Amir", "Sara"] },
+                    { prompt: "Who swept the leaves?", correct: { "Amir": ["swept the leaves"] }, options: ["swept the leaves"], targets: ["Lina", "Amir", "Sara"] },
+                    { prompt: "Who watered the plants?", correct: { "Sara": ["watered the plants"] }, options: ["watered the plants"], targets: ["Lina", "Amir", "Sara"] },
+                    { prompt: "Match everyone with the correct action.", correct: { "Lina": ["picked up the rubbish"], "Amir": ["swept the leaves"], "Sara": ["watered the plants"] }, options: ["picked up the rubbish", "swept the leaves", "watered the plants"], targets: ["Lina", "Amir", "Sara"] }
+                ]
+            },
+            {
+                title: "STAGE 2 - PUT THE STORY IN ORDER", type: "sequence",
+                questions: [
+                    { correctOrder: ["The garden was messy.", "They decided to clean it.", "They cleaned the garden.", "The garden became clean and green."] },
+                    { correctOrder: ["Lina picked up rubbish.", "Amir swept the leaves.", "Sara watered the plants.", "The friends felt proud and happy."] },
+                    { correctOrder: ["They saw rubbish and dry leaves.", "The friends cleaned together.", "The garden looked clean and green.", "Lina asked everyone to keep the school clean."] }
+                ]
+            },
+            {
+                title: "STAGE 3 - TOUCH & FIND!", type: "touch", scene: 1,
+                questions: [
+                    { prompt: "Touch the rubbish.", correctTarget: "rubbish" },
+                    { prompt: "Touch the broom.", correctTarget: "broom" },
+                    { prompt: "Touch the dry leaves.", correctTarget: "leaves" },
+                    { prompt: "Touch the watering can.", correctTarget: "can" },
+                    { prompt: "Touch the plants.", correctTarget: "plants" },
+                    { prompt: "Touch something we use to sweep.", correctTarget: "broom" },
+                    { prompt: "Touch something we use to water plants.", correctTarget: "can" },
+                    { prompt: "Touch something we should put in the bin.", correctTarget: "rubbish" }
+                ]
+            },
+            {
+                title: "STAGE 4 - HELPING OTHERS!", type: "touch", scene: 2,
+                questions: [
+                    { prompt: "Touch the old lady.", correctTarget: "lady" },
+                    { prompt: "Touch the boy's backpack.", correctTarget: "backpack" },
+                    { prompt: "Touch the shopping bags.", correctTarget: "bags" },
+                    { prompt: "Touch the walking stick.", correctTarget: "stick" },
+                    { prompt: "Touch the flowers.", correctTarget: "flowers" },
+                    { prompt: "Touch something the boy carries to school.", correctTarget: "backpack" },
+                    { prompt: "Touch something that helps the old lady walk.", correctTarget: "stick" }
+                ]
+            },
+            {
+                title: "SUPER GREEN BONUS!", type: "bonus", prompt: "TOUCH ALL THE GOOD ACTIONS!",
+                options: [
+                    { id: "opt1", text: "putting rubbish in a bin", isGood: true, img: "🗑️✅" },
+                    { id: "opt2", text: "watering flowers", isGood: true, img: "🌸✅" },
+                    { id: "opt3", text: "throwing rubbish on the ground", isGood: false, img: "🗑️❌" },
+                    { id: "opt4", text: "sweeping leaves", isGood: true, img: "🧹✅" },
+                    { id: "opt5", text: "breaking plants", isGood: false, img: "🥀❌" },
+                    { id: "opt6", text: "helping an elderly person", isGood: true, img: "👵✅" },
+                ]
+            }
+        ];
+
+        // SVGs with large transparent hitboxes added
+        const SVGS = {
+            scene1: `
+                <svg viewBox="0 0 800 600" class="svg-scene" preserveAspectRatio="xMidYMid meet">
+                    <rect width="800" height="400" fill="#E0F7FA"/>
+                    <rect y="400" width="800" height="200" fill="#A5D6A7"/>
+                    <!-- Building -->
+                    <rect x="50" y="200" width="300" height="200" fill="#FFE0B2" stroke="#333" stroke-width="4"/>
+                    <rect x="100" y="250" width="60" height="60" fill="#81D4FA" stroke="#333" stroke-width="4"/>
+                    <rect x="240" y="250" width="60" height="60" fill="#81D4FA" stroke="#333" stroke-width="4"/>
+                    <rect x="160" y="320" width="80" height="80" fill="#8D6E63" stroke="#333" stroke-width="4"/>
+                    <!-- Tree -->
+                    <rect x="650" y="250" width="40" height="180" fill="#795548" stroke="#333" stroke-width="4"/>
+                    <circle cx="670" cy="220" r="80" fill="#4CAF50" stroke="#333" stroke-width="4"/>
+                    <circle cx="620" cy="260" r="60" fill="#4CAF50" stroke="#333" stroke-width="4"/>
+                    <circle cx="720" cy="260" r="60" fill="#4CAF50" stroke="#333" stroke-width="4"/>
+
+                    <g id="bin" class="clickable-obj" transform="translate(400, 320)">
+                        <rect x="-10" y="-10" width="100" height="120" fill="transparent" />
+                        <rect width="80" height="100" fill="#2196F3" stroke="#333" stroke-width="4" rx="10"/>
+                        <path d="M 20 40 L 40 60 L 60 40" stroke="white" stroke-width="4" fill="none"/>
+                        <circle cx="40" cy="50" r="25" stroke="white" stroke-width="4" fill="none" stroke-dasharray="10 5"/>
+                    </g>
+                    <g id="rubbish" class="clickable-obj" transform="translate(300, 480)">
+                        <rect x="-10" y="-10" width="100" height="80" fill="transparent" />
+                        <path d="M 10 20 Q 20 0 30 20 T 50 20 T 40 40 T 10 40 Z" fill="#9E9E9E" stroke="#333" stroke-width="4"/>
+                        <circle cx="70" cy="30" r="10" fill="#FFCC80" stroke="#333" stroke-width="3"/>
+                        <rect x="20" y="45" width="40" height="15" fill="#EF9A9A" stroke="#333" stroke-width="3"/>
+                    </g>
+                    <g id="leaves" class="clickable-obj" transform="translate(600, 460)">
+                        <rect x="-20" y="-20" width="100" height="80" fill="transparent" />
+                        <path d="M 0 10 Q 15 -10 30 10 Q 15 30 0 10" fill="#FFB300" stroke="#333" stroke-width="3"/>
+                        <path d="M 20 20 Q 35 0 50 20 Q 35 40 20 20" fill="#FF8F00" stroke="#333" stroke-width="3"/>
+                        <path d="M -10 25 Q 5 5 20 25 Q 5 45 -10 25" fill="#F57C00" stroke="#333" stroke-width="3"/>
+                    </g>
+                    <g id="broom" class="clickable-obj" transform="translate(150, 420)">
+                        <rect x="-10" y="-10" width="80" height="170" fill="transparent" />
+                        <rect x="20" y="0" width="8" height="100" fill="#795548" stroke="#333" stroke-width="3"/>
+                        <path d="M 5 100 L 43 100 L 48 140 L 0 140 Z" fill="#FFC107" stroke="#333" stroke-width="3"/>
+                    </g>
+                    <g id="can" class="clickable-obj" transform="translate(500, 450)">
+                        <rect x="-10" y="0" width="130" height="90" fill="transparent" />
+                        <rect x="20" y="20" width="50" height="40" fill="#4CAF50" stroke="#333" stroke-width="3" rx="5"/>
+                        <path d="M 70 40 L 100 20 L 100 30 L 70 50 Z" fill="#81C784" stroke="#333" stroke-width="3"/>
+                        <circle cx="100" cy="25" r="8" fill="#E8F5E9" stroke="#333" stroke-width="2"/>
+                        <path d="M 20 30 C 0 20, 0 50, 20 50" fill="none" stroke="#4CAF50" stroke-width="6"/>
+                    </g>
+                    <g id="plants" class="clickable-obj" transform="translate(450, 520)">
+                        <rect x="-10" y="-10" width="120" height="80" fill="transparent" />
+                        <path d="M 20 30 Q 10 0 30 10 Q 50 0 40 30 Z" fill="#4CAF50" stroke="#333" stroke-width="3"/>
+                        <path d="M 40 30 Q 50 10 70 20 Q 90 10 70 40 Z" fill="#66BB6A" stroke="#333" stroke-width="3"/>
+                        <rect x="25" y="30" width="40" height="20" fill="#8D6E63" stroke="#333" stroke-width="3"/>
+                    </g>
+                </svg>
+            `,
+            scene2: `
+                <svg viewBox="0 0 800 600" class="svg-scene" preserveAspectRatio="xMidYMid meet">
+                    <rect width="800" height="350" fill="#FFF9C4"/>
+                    <rect y="350" width="800" height="250" fill="#BDBDBD"/>
+                    <line x1="0" y1="475" x2="800" y2="475" stroke="#FFF" stroke-width="10" stroke-dasharray="40 20"/>
+                    <rect x="550" y="150" width="200" height="200" fill="#FFCC80" stroke="#333" stroke-width="4"/>
+                    <text x="580" y="200" font-family="sans-serif" font-weight="bold" font-size="24" fill="#333">SCHOOL</text>
+
+                    <g id="boy" class="clickable-obj" transform="translate(200, 300)">
+                        <rect x="10" y="0" width="90" height="200" fill="transparent" />
+                        <circle cx="50" cy="30" r="25" fill="#FFCCBC" stroke="#333" stroke-width="3"/>
+                        <line x1="50" y1="55" x2="50" y2="120" stroke="#333" stroke-width="8"/>
+                        <line x1="50" y1="120" x2="30" y2="180" stroke="#333" stroke-width="8"/>
+                        <line x1="50" y1="120" x2="70" y2="180" stroke="#333" stroke-width="8"/>
+                        <line x1="50" y1="70" x2="90" y2="90" stroke="#333" stroke-width="8"/>
+                        <line x1="50" y1="70" x2="20" y2="100" stroke="#333" stroke-width="8"/>
+                        <g id="backpack" class="clickable-obj">
+                            <rect x="0" y="40" width="60" height="70" fill="transparent" />
+                            <rect x="20" y="55" width="25" height="40" fill="#2196F3" stroke="#333" stroke-width="3" rx="5"/>
+                            <rect x="15" y="65" width="10" height="20" fill="#1976D2" stroke="#333" stroke-width="2"/>
+                        </g>
+                    </g>
+                    <g id="lady" class="clickable-obj" transform="translate(350, 280)">
+                        <rect x="20" y="0" width="80" height="220" fill="transparent" />
+                        <circle cx="50" cy="30" r="25" fill="#FFCCBC" stroke="#333" stroke-width="3"/>
+                        <path d="M 25 30 A 25 25 0 0 1 75 30 Z" fill="#E0E0E0" stroke="#333" stroke-width="3"/>
+                        <path d="M 50 55 Q 70 80 50 140" fill="none" stroke="#9C27B0" stroke-width="15" stroke-linecap="round"/>
+                        <line x1="50" y1="140" x2="40" y2="200" stroke="#333" stroke-width="8"/>
+                        <line x1="50" y1="140" x2="60" y2="200" stroke="#333" stroke-width="8"/>
+                        <line x1="60" y1="70" x2="80" y2="120" stroke="#333" stroke-width="8"/>
+                        
+                        <g id="stick" class="clickable-obj">
+                            <rect x="60" y="100" width="50" height="120" fill="transparent" />
+                            <path d="M 80 120 L 90 200" stroke="#795548" stroke-width="6" stroke-linecap="round"/>
+                            <path d="M 70 120 Q 80 100 90 120" fill="none" stroke="#795548" stroke-width="6" stroke-linecap="round"/>
+                        </g>
+                        <g id="bags" class="clickable-obj" transform="translate(10, 100)">
+                            <rect x="-10" y="0" width="70" height="80" fill="transparent" />
+                            <rect x="0" y="20" width="35" height="40" fill="#F44336" stroke="#333" stroke-width="3"/>
+                            <path d="M 10 20 C 10 0, 25 0, 25 20" fill="none" stroke="#333" stroke-width="3"/>
+                            <rect x="15" y="10" width="30" height="50" fill="#4CAF50" stroke="#333" stroke-width="3"/>
+                            <path d="M 20 10 C 20 -10, 35 -10, 35 10" fill="none" stroke="#333" stroke-width="3"/>
+                        </g>
+                    </g>
+                    <g id="flowers" class="clickable-obj" transform="translate(50, 480)">
+                        <rect x="-10" y="-10" width="70" height="100" fill="transparent" />
+                        <circle cx="20" cy="20" r="10" fill="#FFEB3B" stroke="#333" stroke-width="2"/>
+                        <circle cx="20" cy="10" r="8" fill="#E91E63" stroke="#333" stroke-width="2"/>
+                        <circle cx="30" cy="20" r="8" fill="#E91E63" stroke="#333" stroke-width="2"/>
+                        <circle cx="20" cy="30" r="8" fill="#E91E63" stroke="#333" stroke-width="2"/>
+                        <circle cx="10" cy="20" r="8" fill="#E91E63" stroke="#333" stroke-width="2"/>
+                        <path d="M 20 30 Q 15 50 10 70" fill="none" stroke="#4CAF50" stroke-width="4"/>
+                        <path d="M 15 45 Q 30 40 35 30" fill="none" stroke="#4CAF50" stroke-width="4"/>
+                    </g>
+                </svg>
+            `,
+            faces: {
+                Lina: `<svg viewBox="0 0 100 100" class="w-full h-full"><circle cx="50" cy="50" r="45" fill="#FFCCBC"/><path d="M 20 50 A 30 30 0 0 1 80 50" fill="#000"/><circle cx="35" cy="40" r="5" fill="#000"/><circle cx="65" cy="40" r="5" fill="#000"/><path d="M 40 70 Q 50 80 60 70" fill="none" stroke="#000" stroke-width="4" stroke-linecap="round"/></svg>`,
+                Amir: `<svg viewBox="0 0 100 100" class="w-full h-full"><circle cx="50" cy="50" r="45" fill="#FFE0B2"/><path d="M 10 40 Q 50 10 90 40 Z" fill="#3E2723"/><circle cx="35" cy="50" r="5" fill="#000"/><circle cx="65" cy="50" r="5" fill="#000"/><path d="M 40 75 Q 50 85 60 75" fill="none" stroke="#000" stroke-width="4" stroke-linecap="round"/></svg>`,
+                Sara: `<svg viewBox="0 0 100 100" class="w-full h-full"><circle cx="50" cy="50" r="45" fill="#D7CCC8"/><path d="M 15 50 C 15 10 85 10 85 50" fill="#000"/><circle cx="35" cy="45" r="5" fill="#000"/><circle cx="65" cy="45" r="5" fill="#000"/><path d="M 40 70 Q 50 75 60 70" fill="none" stroke="#000" stroke-width="4" stroke-linecap="round"/></svg>`
+            }
+        };
+
+        // --- POINTER EVENT MULTI-TOUCH SYSTEM ---
+        const activePointers = new Map();
+        const globalTouchVisualizers = new Map();
+
+        // Prevent right click entirely
+        document.addEventListener('contextmenu', e => e.preventDefault());
+
+        // Global touch visualizer and test logic
+        document.body.addEventListener('pointerdown', (e) => {
+            if (e.pointerType === 'mouse' && e.button !== 0) return;
+            const ind = document.createElement('div');
+            ind.className = 'touch-indicator';
+            ind.style.left = e.clientX + 'px';
+            ind.style.top = e.clientY + 'px';
+            document.body.appendChild(ind);
+            globalTouchVisualizers.set(e.pointerId, { x: e.clientX, y: e.clientY, el: ind });
+            updateDebugPanel();
+            if(document.getElementById('screen-touch-test').classList.contains('active')) {
+                evaluateTouchTest();
+            }
+        });
+
+        document.body.addEventListener('pointermove', (e) => {
+            if (globalTouchVisualizers.has(e.pointerId)) {
+                const t = globalTouchVisualizers.get(e.pointerId);
+                t.x = e.clientX; t.y = e.clientY;
+                t.el.style.left = e.clientX + 'px';
+                t.el.style.top = e.clientY + 'px';
+                updateDebugPanel();
+                if(document.getElementById('screen-touch-test').classList.contains('active')) {
+                    evaluateTouchTest();
+                }
+            }
+        });
+
+        const removeGlobalTouch = (e) => {
+            if (globalTouchVisualizers.has(e.pointerId)) {
+                const t = globalTouchVisualizers.get(e.pointerId);
+                if (t.el && t.el.parentNode) t.el.parentNode.removeChild(t.el);
+                globalTouchVisualizers.delete(e.pointerId);
+                updateDebugPanel();
+                if(document.getElementById('screen-touch-test').classList.contains('active')) {
+                    evaluateTouchTest();
+                }
+            }
+        };
+        document.body.addEventListener('pointerup', removeGlobalTouch);
+        document.body.addEventListener('pointercancel', removeGlobalTouch);
+
+        function updateDebugPanel() {
+            if (!debugMode) return;
+            let str = `Active Pointers: ${activePointers.size} (Tracked Drags) | Touches: ${globalTouchVisualizers.size}\n\n`;
+            globalTouchVisualizers.forEach((v, key) => {
+                str += `ID: ${key} | X: ${Math.round(v.x)} Y: ${Math.round(v.y)}\n`;
+            });
+            document.getElementById('debug-panel').innerText = str;
+        }
+
+        // --- SCREEN 0: TOUCH TEST LOGIC ---
+        function evaluateTouchTest() {
+            const padB = document.getElementById('test-pad-b').getBoundingClientRect();
+            const padA = document.getElementById('test-pad-a').getBoundingClientRect();
+            
+            let bTouched = false;
+            let aTouched = false;
+
+            globalTouchVisualizers.forEach((t) => {
+                if (t.x >= padB.left && t.x <= padB.right && t.y >= padB.top && t.y <= padB.bottom) bTouched = true;
+                if (t.x >= padA.left && t.x <= padA.right && t.y >= padA.top && t.y <= padA.bottom) aTouched = true;
+            });
+
+            document.getElementById('test-status-b').innerText = bTouched ? '✅ TOUCH DETECTED' : '';
+            document.getElementById('test-status-a').innerText = aTouched ? '✅ TOUCH DETECTED' : '';
+            document.getElementById('test-touch-count').innerText = `ACTIVE TOUCHES: ${globalTouchVisualizers.size}`;
+
+            const succ = document.getElementById('test-success');
+            if (bTouched && aTouched) {
+                succ.innerText = '✅ MULTI-TOUCH READY!';
+                document.getElementById('test-pad-b').style.borderColor = '#FFEB3B';
+                document.getElementById('test-pad-a').style.borderColor = '#FFEB3B';
+                playSound('snap');
+            } else {
+                succ.innerText = '';
+                document.getElementById('test-pad-b').style.borderColor = '#b91c1c';
+                document.getElementById('test-pad-a').style.borderColor = '#1d4ed8';
+            }
+        }
+        function finishTouchTest() {
+            initAudio();
+            showScreen('screen-setup');
+            loadState();
+            renderLists();
+        }
+
+        // --- POINTER DRAG & DROP ENGINE ---
+        function makePointerDraggable(element, teamAttr, dropZoneSelector, onDropComplete, checkLock = null) {
+            element.style.touchAction = 'none';
+            
+            element.addEventListener('pointerdown', (e) => {
+                if (checkLock && checkLock(teamAttr)) return; // Don't allow drag if team locked
+                e.preventDefault();
+                e.stopPropagation();
+
+                const state = {
+                    startX: e.clientX, startY: e.clientY, currentX: 0, currentY: 0,
+                    el: element, team: teamAttr, homeParent: element.parentElement
+                };
+                
+                activePointers.set(e.pointerId, state);
+                element.setPointerCapture(e.pointerId);
+                element.classList.add('dragging');
+                playSound('tick');
+            });
+
+            element.addEventListener('pointermove', (e) => {
+                const state = activePointers.get(e.pointerId);
+                if (!state || state.el !== element) return;
+                e.preventDefault();
+                e.stopPropagation();
+
+                state.currentX = e.clientX - state.startX;
+                state.currentY = e.clientY - state.startY;
+                element.style.transform = `translate3d(${state.currentX}px, ${state.currentY}px, 0) scale(1.08)`;
+
+                // Hover zones
+                document.querySelectorAll(`${dropZoneSelector}[data-team="${teamAttr}"]`).forEach(z => z.classList.remove('hovered'));
+                const zones = Array.from(document.querySelectorAll(`${dropZoneSelector}[data-team="${teamAttr}"]`));
+                for (let z of zones) {
+                    const zr = z.getBoundingClientRect();
+                    if (e.clientX >= zr.left && e.clientX <= zr.right && e.clientY >= zr.top && e.clientY <= zr.bottom) {
+                        z.classList.add('hovered');
+                        break;
+                    }
+                }
+            });
+
+            const endDrag = (e) => {
+                const state = activePointers.get(e.pointerId);
+                if (!state || state.el !== element) return;
+                
+                element.releasePointerCapture(e.pointerId);
+                element.classList.remove('dragging');
+                
+                // Clear hovers
+                document.querySelectorAll(`${dropZoneSelector}[data-team="${teamAttr}"]`).forEach(z => z.classList.remove('hovered'));
+
+                const rect = element.getBoundingClientRect(); // Bounds include transform
+                const centerX = rect.left + rect.width / 2;
+                const centerY = rect.top + rect.height / 2;
+
+                const zones = Array.from(document.querySelectorAll(`${dropZoneSelector}[data-team="${teamAttr}"]`));
+                let bestZone = null;
+                let maxOv = 0;
+
+                zones.forEach(z => {
+                    const zr = z.getBoundingClientRect();
+                    // Tolerance area (+25px)
+                    if (centerX >= zr.left - 25 && centerX <= zr.right + 25 &&
+                        centerY >= zr.top - 25 && centerY <= zr.bottom + 25) {
+                        // Calc intersect area
+                        const x = Math.max(0, Math.min(rect.right, zr.right) - Math.max(rect.left, zr.left));
+                        const y = Math.max(0, Math.min(rect.bottom, zr.bottom) - Math.max(rect.top, zr.top));
+                        const overlap = x * y;
+                        if (overlap > maxOv) { maxOv = overlap; bestZone = z; }
+                    }
+                });
+
+                if (bestZone) {
+                    onDropComplete(element, bestZone, state.homeParent);
+                } else {
+                    // Revert visual
+                    element.style.transition = 'transform 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275)';
+                    element.style.transform = `translate3d(0, 0, 0) scale(1)`;
+                    setTimeout(() => { element.style.transition = ''; }, 300);
+                    onDropComplete(element, null, state.homeParent);
+                }
+
+                activePointers.delete(e.pointerId);
+            };
+
+            element.addEventListener('pointerup', endDrag);
+            element.addEventListener('pointercancel', endDrag);
+        }
+
+        // --- INIT & LOCAL STORAGE ---
+        function showScreen(id) {
+            document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+            document.getElementById(id).classList.add('active');
+        }
+
+        function loadState() {
+            try {
+                const saved = localStorage.getItem('greenSchoolGame2');
+                if (saved) {
+                    const data = JSON.parse(saved);
+                    gameState.groupA.players = data.groupA || [];
+                    gameState.groupB.players = data.groupB || [];
+                    document.getElementById('name-group-a').value = data.nameA || 'GROUP A';
+                    document.getElementById('name-group-b').value = data.nameB || 'GROUP B';
+                }
+            } catch (e) {}
+        }
+        function saveState() {
+            localStorage.setItem('greenSchoolGame2', JSON.stringify({
+                groupA: gameState.groupA.players,
+                groupB: gameState.groupB.players,
+                nameA: document.getElementById('name-group-a').value,
+                nameB: document.getElementById('name-group-b').value
+            }));
+        }
+
+        // --- SETUP LOGIC ---
+        function addPlayers() {
+            initAudio();
+            const text = document.getElementById('player-input').value;
+            const names = text.split(/[\n,]+/).map(n => n.trim()).filter(n => n.length > 0);
+            names.forEach(n => {
+                if(gameState.groupB.players.length <= gameState.groupA.players.length) {
+                    gameState.groupB.players.push(n);
+                } else {
+                    gameState.groupA.players.push(n);
+                }
+            });
+            document.getElementById('player-input').value = '';
+            renderLists();
+            saveState();
+        }
+
+        function clearPlayers() {
+            gameState.groupA.players = [];
+            gameState.groupB.players = [];
+            renderLists();
+            saveState();
+        }
+
+        function randomiseGroups() {
+            playSound('tick');
+            let all = [...gameState.groupB.players, ...gameState.groupA.players];
+            for (let i = all.length - 1; i > 0; i--) {
+                const j = Math.floor(Math.random() * (i + 1));
+                [all[i], all[j]] = [all[j], all[i]];
+            }
+            gameState.groupB.players = [];
+            gameState.groupA.players = [];
+            all.forEach((n, i) => {
+                if (i % 2 === 0) gameState.groupB.players.push(n);
+                else gameState.groupA.players.push(n);
+            });
+            renderLists();
+            saveState();
+        }
+
+        function renderLists() {
+            const listB = document.getElementById('list-group-b');
+            const listA = document.getElementById('list-group-a');
+            listB.innerHTML = ''; listA.innerHTML = '';
+            
+            const createCard = (p, team) => {
+                const d = document.createElement('div');
+                d.className = 'name-card';
+                d.innerText = p;
+                d.dataset.name = p;
+                d.dataset.team = team;
+                
+                // Allow card to be dragged to EITHER zone by pretending it belongs to both temporarily, or handling drop manually
+                // We'll give it a generic drag rule
+                makePointerDraggable(d, team, '.drop-zone-name', (el, targetZone) => {
+                    if (targetZone) {
+                        const newTeam = targetZone.dataset.team;
+                        const oldTeam = el.dataset.team;
+                        if (newTeam !== oldTeam) {
+                            // Swap array logic
+                            const name = el.dataset.name;
+                            if (oldTeam === 'B') gameState.groupB.players = gameState.groupB.players.filter(n => n !== name);
+                            else gameState.groupA.players = gameState.groupA.players.filter(n => n !== name);
+                            
+                            if (newTeam === 'B') gameState.groupB.players.push(name);
+                            else gameState.groupA.players.push(name);
+                            
+                            playSound('snap');
+                            saveState();
+                            renderLists(); // Re-render to sort and fix attributes
+                            return;
+                        }
+                    }
+                    // Revert if invalid or same team
+                    el.style.transition = 'transform 0.3s';
+                    el.style.transform = `translate3d(0, 0, 0) scale(1)`;
+                    setTimeout(() => { el.style.transition = ''; }, 300);
+                });
+                return d;
+            };
+
+            gameState.groupB.players.forEach(p => listB.appendChild(createCard(p, 'B')));
+            gameState.groupA.players.forEach(p => listA.appendChild(createCard(p, 'A')));
+
+            // Allow dragging from A to B and B to A by faking the attribute during search
+            // The makePointerDraggable filters drop zones by data-team. 
+            // We want name cards to drop on ANY team. So we temporarily override the query logic.
+            // A quick fix is overriding the team attribute specifically for name cards during drag.
+            document.querySelectorAll('.name-card').forEach(c => {
+                c.addEventListener('pointerdown', () => { c.dataset.originalTeam = c.dataset.team; c.dataset.team = 'ANY'; });
+                c.addEventListener('pointerup', () => { c.dataset.team = c.dataset.originalTeam; });
+                c.addEventListener('pointercancel', () => { c.dataset.team = c.dataset.originalTeam; });
+            });
+            document.querySelectorAll('.drop-zone-name').forEach(z => {
+                z.dataset.originalTeam = z.dataset.team;
+                z.dataset.team = 'ANY'; // Allow anything to drop here
+            });
+        }
+
+        // --- GAME FLOW ---
+        function startGame() {
+            initAudio();
+            // Restore actual team IDs to zones
+            document.querySelectorAll('.drop-zone-name').forEach(z => z.dataset.team = z.dataset.originalTeam);
+
+            gameState.groupB.name = document.getElementById('name-group-b').value || 'GROUP B';
+            gameState.groupA.name = document.getElementById('name-group-a').value || 'GROUP A';
+            saveState();
+
+            document.getElementById('game-name-b').innerText = gameState.groupB.name;
+            document.getElementById('game-name-a').innerText = gameState.groupA.name;
+            document.getElementById('intro-name-b').innerText = gameState.groupB.name;
+            document.getElementById('intro-name-a').innerText = gameState.groupA.name;
+
+            document.getElementById('intro-members-b').innerText = gameState.groupB.players.join(', ') || 'Team B';
+            document.getElementById('intro-members-a').innerText = gameState.groupA.players.join(', ') || 'Team A';
+
+            showScreen('screen-intro');
+            
+            let count = 3;
+            const cntEl = document.getElementById('countdown-num');
+            cntEl.innerText = count;
+            playSound('tick');
+            
+            const int = setInterval(() => {
+                count--;
+                if(count > 0) {
+                    cntEl.innerText = count;
+                    playSound('tick');
+                } else if(count === 0) {
+                    cntEl.innerText = "GO!";
+                    playSound('win');
+                } else {
+                    clearInterval(int);
+                    gameState.currentStage = 0;
+                    gameState.currentQuestion = 0;
+                    gameState.groupA.score = 0;
+                    gameState.groupB.score = 0;
+                    updateScores();
+                    loadQuestion();
+                    showScreen('screen-game');
+                }
+            }, 1000);
+        }
+
+        function updateScores() {
+            document.getElementById('score-b').innerText = gameState.groupB.score;
+            document.getElementById('score-a').innerText = gameState.groupA.score;
+        }
+
+        function loadQuestion() {
+            const stage = gameData[gameState.currentStage];
+            if (!stage) { endGame(); return; }
+
+            document.getElementById('lock-b').classList.remove('show');
+            document.getElementById('lock-a').classList.remove('show');
+            document.getElementById('feedback-b').classList.remove('show');
+            document.getElementById('feedback-a').classList.remove('show');
+            
+            document.getElementById('submit-b').disabled = false;
+            document.getElementById('submit-a').disabled = false;
+
+            gameState.groupA.locked = false;
+            gameState.groupB.locked = false;
+            gameState.groupA.currentAnswers = {};
+            gameState.groupB.currentAnswers = {};
+
+            document.getElementById('stage-title').innerText = stage.title;
+            let qStr = stage.type === 'bonus' ? 'BONUS' : `Question ${gameState.currentQuestion + 1} / ${stage.questions.length}`;
+            document.getElementById('question-counter').innerText = qStr;
+
+            const qData = stage.type === 'bonus' ? stage : stage.questions[gameState.currentQuestion];
+
+            buildInterface(stage.type, qData, 'B', document.getElementById('content-b'));
+            buildInterface(stage.type, qData, 'A', document.getElementById('content-a'));
+
+            startTimer();
+        }
+
+        // --- INTERFACE BUILDERS ---
+        function buildInterface(type, data, group, container) {
+            container.innerHTML = '';
+            
+            const promptEl = document.createElement('div');
+            promptEl.className = 'text-3xl font-bold bg-white p-4 rounded-xl shadow-md border-4 border-gray-300 mb-4 text-center';
+            promptEl.innerText = data.prompt || data.title || "";
+            if (data.prompt) container.appendChild(promptEl);
+
+            if (type === 'match') {
+                const area = document.createElement('div');
+                area.className = 'flex flex-col h-full gap-4 relative';
+                
+                const targetsArea = document.createElement('div');
+                targetsArea.className = 'flex justify-around bg-blue-100 p-4 rounded-xl border-4 border-blue-300';
+                data.targets.forEach(t => {
+                    const wrap = document.createElement('div');
+                    wrap.className = 'flex flex-col items-center gap-2';
+                    const face = document.createElement('div');
+                    face.className = 'char-img'; face.innerHTML = SVGS.faces[t] || '';
+                    const name = document.createElement('div');
+                    name.className = 'font-bold text-2xl'; name.innerText = t;
+                    const drop = document.createElement('div');
+                    drop.className = 'drop-zone w-full';
+                    drop.dataset.targetId = t; drop.dataset.team = group;
+                    
+                    wrap.appendChild(face); wrap.appendChild(name); wrap.appendChild(drop);
+                    targetsArea.appendChild(wrap);
+                });
+
+                const dragArea = document.createElement('div');
+                dragArea.id = `drag-pool-${group}`;
+                dragArea.className = 'drag-pool bg-gray-100 rounded-xl border-4 border-gray-300 mt-auto p-4';
+                
+                data.options.forEach(opt => {
+                    const el = document.createElement('div');
+                    el.className = 'drag-item'; el.innerText = opt;
+                    el.dataset.val = opt; el.dataset.team = group;
+                    dragArea.appendChild(el);
+                    attachGameDrag(el, group);
+                });
+
+                area.appendChild(targetsArea); area.appendChild(dragArea);
+                container.appendChild(area);
+
+            } else if (type === 'sequence') {
+                const area = document.createElement('div');
+                area.className = 'flex flex-col h-full gap-4 relative';
+
+                const dropsArea = document.createElement('div');
+                dropsArea.className = 'grid-container stage2-grid flex-grow';
+                
+                let opts = [...data.correctOrder];
+                for(let i = opts.length-1; i>0; i--){ let j = Math.floor(Math.random()*(i+1)); [opts[i], opts[j]] = [opts[j], opts[i]]; }
+
+                for(let i=0; i<4; i++){
+                    const row = document.createElement('div');
+                    row.className = 'flex items-center gap-4';
+                    const num = document.createElement('div');
+                    num.className = 'text-5xl font-bold text-gray-500 w-16 text-center'; num.innerText = i+1;
+                    const drop = document.createElement('div');
+                    drop.className = 'drop-zone flex-grow h-24 m-0';
+                    drop.dataset.targetId = i; drop.dataset.team = group;
+                    row.appendChild(num); row.appendChild(drop);
+                    dropsArea.appendChild(row);
+                }
+
+                const dragArea = document.createElement('div');
+                dragArea.id = `drag-pool-${group}`;
+                dragArea.className = 'drag-pool bg-gray-100 rounded-xl border-4 border-gray-300 p-4 gap-2';
+                
+                opts.forEach(opt => {
+                    const el = document.createElement('div');
+                    el.className = 'drag-item text-2xl p-4 w-full';
+                    el.innerText = opt; el.dataset.val = opt; el.dataset.team = group;
+                    dragArea.appendChild(el);
+                    attachGameDrag(el, group);
+                });
+
+                area.appendChild(dropsArea); area.appendChild(dragArea);
+                container.appendChild(area);
+
+            } else if (type === 'touch') {
+                const sceneArea = document.createElement('div');
+                sceneArea.className = 'w-full h-full relative';
+                sceneArea.innerHTML = data.scene === 1 ? SVGS.scene1 : SVGS.scene2;
+                
+                const interactables = sceneArea.querySelectorAll('.clickable-obj');
+                interactables.forEach(el => {
+                    el.addEventListener('pointerdown', (e) => {
+                        e.preventDefault(); e.stopPropagation();
+                        if (gameState[group === 'A' ? 'groupA' : 'groupB'].locked) return;
+                        
+                        interactables.forEach(i => i.classList.remove('selected'));
+                        el.classList.add('selected');
+                        playSound('tick');
+                        
+                        const gState = group === 'A' ? gameState.groupA : gameState.groupB;
+                        gState.currentAnswers = [el.id]; // Array format for touch
+                    });
+                });
+                container.appendChild(sceneArea);
+
+            } else if (type === 'bonus') {
+                const grid = document.createElement('div');
+                grid.className = 'grid grid-cols-2 gap-4 h-full';
+                data.options.forEach(opt => {
+                    const btn = document.createElement('div');
+                    btn.className = 'bg-white border-4 border-gray-300 rounded-xl p-6 flex flex-col items-center justify-center text-center cursor-pointer text-2xl font-bold shadow-md transition-all touch-action-none select-none';
+                    btn.innerHTML = `<div class="text-6xl mb-2 pointer-events-none">${opt.img}</div><div class="pointer-events-none">${opt.text}</div>`;
+                    btn.dataset.id = opt.id;
+                    
+                    btn.addEventListener('pointerdown', (e) => {
+                        e.preventDefault(); e.stopPropagation();
+                        if (gameState[group === 'A' ? 'groupA' : 'groupB'].locked) return;
+                        
+                        btn.classList.toggle('border-blue-500');
+                        btn.classList.toggle('bg-blue-100');
+                        playSound('tick');
+                        
+                        const gState = group === 'A' ? gameState.groupA : gameState.groupB;
+                        gState.currentAnswers = gState.currentAnswers || [];
+                        if(btn.classList.contains('bg-blue-100')){
+                            gState.currentAnswers.push(opt.id);
+                        } else {
+                            gState.currentAnswers = gState.currentAnswers.filter(id => id !== opt.id);
+                        }
+                    });
+                    grid.appendChild(btn);
+                });
+                container.appendChild(grid);
+            }
+        }
+
+        function attachGameDrag(el, group) {
+            makePointerDraggable(el, group, '.drop-zone', (droppedEl, zone, homeParent) => {
+                if (zone) {
+                    // Check if occupied
+                    const existing = zone.querySelector('.drag-item');
+                    if (existing && existing !== droppedEl) {
+                        const pool = document.getElementById(`drag-pool-${group}`);
+                        pool.appendChild(existing);
+                        existing.style.transform = 'translate3d(0,0,0) scale(1)';
+                    }
+                    zone.appendChild(droppedEl);
+                    droppedEl.style.transition = 'none';
+                    droppedEl.style.transform = 'translate3d(0,0,0) scale(1)';
+                    playSound('snap');
+                } else {
+                    // Revert to pool if dragged outside
+                    const pool = document.getElementById(`drag-pool-${group}`);
+                    if (droppedEl.parentElement !== pool) {
+                        pool.appendChild(droppedEl);
+                    }
+                }
+                updateGameAnswers(group);
+            }, (grp) => gameState[grp === 'A' ? 'groupA' : 'groupB'].locked);
+        }
+
+        function updateGameAnswers(group) {
+            const gState = group === 'A' ? gameState.groupA : gameState.groupB;
+            const stage = gameData[gameState.currentStage];
+            
+            if (stage.type === 'match' || stage.type === 'sequence') {
+                let ans = {};
+                const zones = document.querySelectorAll(`.drop-zone[data-team="${group}"]`);
+                zones.forEach(z => {
+                    const id = z.dataset.targetId;
+                    const items = z.querySelectorAll('.drag-item');
+                    if (items.length > 0) {
+                        ans[id] = Array.from(items).map(i => i.dataset.val);
+                    }
+                });
+                gState.currentAnswers = ans;
+            }
+        }
+
+        // --- TIMER & LOGIC ---
+        function startTimer() {
+            clearInterval(gameState.timerInterval);
+            gameState.timer = 20;
+            const tb = document.getElementById('main-timer');
+            tb.innerText = gameState.timer;
+            tb.classList.remove('timer-pulse');
+
+            gameState.timerInterval = setInterval(() => {
+                gameState.timer--;
+                tb.innerText = gameState.timer;
+                
+                if (gameState.timer <= 5 && gameState.timer > 0) {
+                    tb.classList.add('timer-pulse');
+                    playSound('tick');
+                } else {
+                    tb.classList.remove('timer-pulse');
+                }
+
+                if (gameState.groupA.locked && gameState.groupB.locked) {
+                    clearInterval(gameState.timerInterval);
+                    evaluateAnswers();
+                    return;
+                }
+
+                if (gameState.timer <= 0) {
+                    clearInterval(gameState.timerInterval);
+                    tb.innerText = "TIME!";
+                    evaluateAnswers();
+                }
+            }, 1000);
+        }
+
+        function submitAnswer(group) {
+            const gState = group === 'A' ? gameState.groupA : gameState.groupB;
+            if (gState.locked) return;
+            
+            gState.locked = true;
+            document.getElementById(`submit-${group.toLowerCase()}`).disabled = true;
+            document.getElementById(`lock-${group.toLowerCase()}`).classList.add('show');
+            playSound('lock');
+        }
+
+        function evaluateAnswers() {
+            gameState.groupA.locked = true;
+            gameState.groupB.locked = true;
+            document.getElementById('lock-b').classList.add('show');
+            document.getElementById('lock-a').classList.add('show');
+
+            const stage = gameData[gameState.currentStage];
+            const qData = stage.type === 'bonus' ? stage : stage.questions[gameState.currentQuestion];
+
+            const resB = checkAnswer('B', stage.type, qData);
+            const resA = checkAnswer('A', stage.type, qData);
+
+            showFeedback('B', resB);
+            showFeedback('A', resA);
+
+            if (resB || resA) playSound('coin');
+            else playSound('wrong');
+
+            setTimeout(() => {
+                if (stage.type === 'bonus') {
+                    showTransition();
+                } else {
+                    gameState.currentQuestion++;
+                    if (gameState.currentQuestion >= stage.questions.length) {
+                        showTransition();
+                    } else {
+                        loadQuestion();
+                    }
+                }
+            }, 3000);
+        }
+
+        function checkAnswer(group, type, data) {
+            const ans = group === 'A' ? gameState.groupA.currentAnswers : gameState.groupB.currentAnswers;
+            let correct = false;
+
+            if (type === 'match') {
+                correct = true;
+                for (const [key, vals] of Object.entries(data.correct)) {
+                    if (!ans[key] || ans[key].length !== vals.length) { correct = false; break; }
+                    for (let v of vals) { if (!ans[key].includes(v)) { correct = false; break; } }
+                }
+                let totalPlaced = 0; let totalExpected = 0;
+                Object.values(ans).forEach(arr => totalPlaced += arr.length);
+                Object.values(data.correct).forEach(arr => totalExpected += arr.length);
+                if (totalPlaced !== totalExpected) correct = false;
+                
+            } else if (type === 'sequence') {
+                correct = true;
+                for (let i = 0; i < data.correctOrder.length; i++) {
+                    if (!ans[i] || ans[i][0] !== data.correctOrder[i]) correct = false;
+                }
+            } else if (type === 'touch') {
+                if (ans && ans.length > 0 && ans[0] === data.correctTarget) correct = true;
+            } else if (type === 'bonus') {
+                const goodIds = data.options.filter(o => o.isGood).map(o => o.id);
+                const badIds = data.options.filter(o => !o.isGood).map(o => o.id);
+                const selected = ans || [];
+                let hasAllGood = goodIds.every(id => selected.includes(id));
+                let hasNoBad = badIds.every(id => !selected.includes(id));
+                correct = hasAllGood && hasNoBad;
+            }
+
+            if (correct) {
+                let pts = type === 'bonus' ? 500 : 100 + (gameState.timer * 5);
+                if (group === 'A') gameState.groupA.score += pts;
+                else gameState.groupB.score += pts;
+                updateScores();
+            }
+            return correct;
+        }
+
+        function showFeedback(group, isCorrect) {
+            const fb = document.getElementById(`feedback-${group.toLowerCase()}`);
+            if (isCorrect) {
+                const msgs = ['⭐ GREAT!', '⭐ CORRECT!', '⭐ AWESOME!', '⭐ WELL DONE!'];
+                fb.innerText = msgs[Math.floor(Math.random() * msgs.length)];
+                fb.className = 'feedback-popup show';
+            } else {
+                fb.innerText = 'GOOD TRY!';
+                fb.className = 'feedback-popup wrong show';
+            }
+        }
+
+        // --- TRANSITIONS & ENDING ---
+        function showTransition() {
+            document.getElementById('trans-name-b').innerText = gameState.groupB.name;
+            document.getElementById('trans-score-b').innerText = gameState.groupB.score;
+            document.getElementById('trans-name-a').innerText = gameState.groupA.name;
+            document.getElementById('trans-score-a').innerText = gameState.groupA.score;
+            
+            showScreen('screen-transition');
+            playSound('win');
+        }
+
+        function nextStage() {
+            gameState.currentStage++;
+            gameState.currentQuestion = 0;
+            if (gameState.currentStage >= gameData.length) {
+                endGame();
+            } else {
+                showScreen('screen-game');
+                loadQuestion();
+            }
+        }
+
+        function endGame() {
+            document.getElementById('final-name-b').innerText = gameState.groupB.name;
+            document.getElementById('final-score-b').innerText = gameState.groupB.score;
+            document.getElementById('final-name-a').innerText = gameState.groupA.name;
+            document.getElementById('final-score-a').innerText = gameState.groupA.score;
+
+            const winText = document.getElementById('winner-text');
+            const boxB = document.getElementById('final-box-b');
+            const boxA = document.getElementById('final-box-a');
+            
+            boxB.style.transform = 'scale(1)';
+            boxA.style.transform = 'scale(1)';
+            boxB.style.borderColor = 'white';
+            boxA.style.borderColor = 'white';
+
+            if (gameState.groupB.score > gameState.groupA.score) {
+                winText.innerText = `${gameState.groupB.name} WINS!`;
+                boxB.style.transform = 'scale(1.15)';
+                boxB.style.borderColor = '#FFEB3B';
+            } else if (gameState.groupA.score > gameState.groupB.score) {
+                winText.innerText = `${gameState.groupA.name} WINS!`;
+                boxA.style.transform = 'scale(1.15)';
+                boxA.style.borderColor = '#FFEB3B';
+            } else {
+                winText.innerText = "IT'S A DRAW!";
+                boxB.style.transform = 'scale(1.1)';
+                boxA.style.transform = 'scale(1.1)';
+            }
+
+            showScreen('screen-end');
+            playSound('win');
+            createConfetti();
+        }
+
+        function createConfetti() {
+            for (let i = 0; i < 120; i++) {
+                const conf = document.createElement('div');
+                conf.className = 'confetti';
+                conf.style.left = Math.random() * 100 + 'vw';
+                conf.style.top = -20 + 'px';
+                conf.style.backgroundColor = ['#f44336', '#4CAF50', '#FFEB3B', '#2196F3', '#9C27B0'][Math.floor(Math.random() * 5)];
+                conf.style.animationDuration = (Math.random() * 3 + 2) + 's';
+                conf.style.animationDelay = (Math.random() * 2) + 's';
+                document.getElementById('screen-end').appendChild(conf);
+            }
+        }
+
+        function resetGame(keepGroups) {
+            document.querySelectorAll('.confetti').forEach(e => e.remove());
+            if (!keepGroups) {
+                gameState.groupA.players = [];
+                gameState.groupB.players = [];
+                renderLists();
+                saveState();
+            }
+            showScreen('screen-setup');
+        }
+
+        function skipStage() {
+            clearInterval(gameState.timerInterval);
+            showTransition();
+        }
+
+    </script>
+</body>
+</html>
